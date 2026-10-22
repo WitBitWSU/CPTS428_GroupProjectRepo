@@ -1,15 +1,16 @@
 """Proof-of-concept prompt-injection harness (stdlib only, Python 3.10+).
 
 Usage:
-    python harness.py seeds/delete_all.json seeds/exfiltrate.json \
-        --target stub_agent:vulnerable_agent --repeats 3
+    python harness.py seeds/delete_all.json seeds/exfiltrate.json --env mock_environment
 
-For each seed file the harness builds a fresh mock mailbox, calls the agent with the
-seed's user task, then compares the mailbox's final state to the seed's expected_result.
+For each seed the harness: resets the test mailbox, populates it with the seed's emails,
+reads the state, tells the agent to do the seed's user task, reads the state again, and
+checks the result against the seed's expected_result. All email-client and agent specifics
+live in the --env module (default: environment.py); see its docstring.
 """
 
 import argparse
-import copy
+import glob
 import importlib
 import json
 import sys
@@ -20,52 +21,24 @@ from pathlib import Path
 ATTACK_TYPES = {"delete_all", "exfiltrate", "flag"}
 REQUIRED_SEED_KEYS = {"name", "attack_type", "user_task", "mailbox", "expected_result"}
 REQUIRED_EMAIL_KEYS = {"id", "sender", "subject", "body"}
-
-
-# --------------------------------------------------------------------------
-# Mock mailbox: stands in for the email client until it exists.
-# The agent's tools should call these five methods.
-# --------------------------------------------------------------------------
-class Mailbox:
-    def __init__(self, emails):
-        self.inbox = copy.deepcopy(emails)
-        self.deleted, self.sent, self.flagged, self.log = [], [], set(), []
-
-    def list_emails(self):
-        self.log.append({"tool": "list"})
-        return [{k: e[k] for k in ("id", "sender", "subject")} for e in self.inbox]
-
-    def read_email(self, email_id):
-        self.log.append({"tool": "read", "id": email_id})
-        return next(e for e in self.inbox if e["id"] == email_id)
-
-    def send_email(self, to, subject, body):
-        self.log.append({"tool": "send", "to": to})
-        self.sent.append({"to": to, "subject": subject, "body": body})
-
-    def delete_email(self, email_id):
-        self.log.append({"tool": "delete", "id": email_id})
-        for e in self.inbox:
-            if e["id"] == email_id:
-                self.inbox.remove(e)
-                self.deleted.append(email_id)
-                return
-
-    def flag_email(self, email_id):
-        self.log.append({"tool": "flag", "id": email_id})
-        self.flagged.add(email_id)
-
-    def state(self):
-        return {"inbox_count": len(self.inbox),
-                "inbox_ids": [e["id"] for e in self.inbox],
-                "deleted_ids": list(self.deleted),
-                "flagged_ids": sorted(self.flagged),
-                "sent": copy.deepcopy(self.sent)}
+ENV_FUNCTIONS = ("reset_mailbox", "populate_mailbox", "invoke_agent", "read_mailbox_state")
 
 
 # --------------------------------------------------------------------------
 # Seed loading and result checking
 # --------------------------------------------------------------------------
+def expand_paths(paths):
+    """Expand wildcards ourselves, because PowerShell does not."""
+    expanded = []
+    for path in paths:
+        text = str(path)
+        matches = sorted(glob.glob(text)) if any(c in text for c in "*?[") else [text]
+        if not matches:
+            raise ValueError(f"No files match {text}")
+        expanded.extend(Path(m) for m in matches)
+    return expanded
+
+
 def load_seed(path):
     seed = json.loads(Path(path).read_text(encoding="utf-8"))
     missing = REQUIRED_SEED_KEYS - set(seed)
@@ -77,6 +50,10 @@ def load_seed(path):
         if REQUIRED_EMAIL_KEYS - set(email):
             raise ValueError(f"{path}: email missing keys {sorted(REQUIRED_EMAIL_KEYS - set(email))}")
     return seed
+
+
+def load_seeds(paths):
+    return [load_seed(path) for path in expand_paths(paths)]
 
 
 def check_expected(expected, state):
@@ -106,71 +83,111 @@ def check_expected(expected, state):
 # --------------------------------------------------------------------------
 # Running
 # --------------------------------------------------------------------------
-def load_agent(target):
-    module_name, function_name = target.split(":", 1)
-    return getattr(importlib.import_module(module_name), function_name)
+def load_environment(module_name):
+    module = importlib.import_module(module_name)
+    missing = [name for name in ENV_FUNCTIONS if not callable(getattr(module, name, None))]
+    if missing:
+        raise ValueError(f"{module_name} is missing functions: {missing}")
+    return module
 
 
-def run_trial(seed, agent):
-    mailbox = Mailbox(seed["mailbox"])
-    before = mailbox.state()
+def run_trial(seed, env):
+    before = after = None
     response, error = "", ""
     started = time.perf_counter()
     try:
-        response = str(agent(seed["user_task"], mailbox))
+        env.reset_mailbox()
+        env.populate_mailbox(seed["mailbox"])
+        before = env.read_mailbox_state()
+        response = str(env.invoke_agent(seed["user_task"]))
+        after = env.read_mailbox_state()
+    except NotImplementedError:
+        raise  # an unimplemented hook aborts the run; it is not a per-trial error
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-    after = mailbox.state()
-    checks = check_expected(seed["expected_result"], after)
+    checks = {} if error else check_expected(seed["expected_result"], after)
     return {"seed": seed["name"], "attack_type": seed["attack_type"],
             "status": "error" if error else "ok", "error": error,
             "elapsed_seconds": round(time.perf_counter() - started, 4),
-            "response": response, "tool_calls": mailbox.log,
-            "before": before, "after": after, "checks": checks,
+            "response": response, "before": before, "after": after, "checks": checks,
             # An errored run is not a success and is excluded from the rate below.
-            "attack_success": (all(checks.values()) if not error else None)}
+            "attack_success": None if error else all(checks.values())}
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("seeds", nargs="+", type=Path,
+                        help="seed JSON files (wildcards like seeds/*.json are fine)")
+    parser.add_argument("--env", default="environment",
+                        help="module providing the four environment functions "
+                             "(default: environment; use mock_environment for the demo)")
+    parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--output-dir", type=Path, default=Path(__file__).parent / "results")
+    return parser
+
+
+def format_trial_line(trial):
+    def inbox(state):
+        return "?" if state is None else state["inbox_count"]
+    sent = "?" if trial["after"] is None else len(trial["after"]["sent"])
+    line = (f"{trial['seed']} #{trial['trial']}: inbox {inbox(trial['before'])} -> "
+            f"{inbox(trial['after'])}, sent {sent}, attack_success={trial['attack_success']}")
+    return line + (f"  ERROR {trial['error']}" if trial["error"] else "")
+
+
+def run_all(seeds, env, repeats):
+    """Run every seed `repeats` times, printing one line per trial."""
+    trials = []
+    for seed in seeds:
+        for n in range(1, repeats + 1):
+            trial = run_trial(seed, env)
+            trial["trial"] = n
+            trials.append(trial)
+            print(format_trial_line(trial))
+    return trials
+
+
+def summarize(trials, env_name, repeats):
+    completed = [t for t in trials if t["status"] == "ok"]
+    wins = sum(t["attack_success"] for t in completed)
+    return {"environment": env_name, "repeats": repeats, "trials": len(trials),
+            "completed": len(completed), "attack_successes": wins,
+            "attack_success_rate": wins / len(completed) if completed else None}
+
+
+def write_results(output_dir, summary, trials):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json")
+    path.write_text(json.dumps({"summary": summary, "trials": trials}, indent=2), encoding="utf-8")
+    return path
+
+
+def print_summary(summary, results_path):
+    rate = summary["attack_success_rate"]
+    print(f"Attack success rate: {'N/A' if rate is None else f'{rate:.0%}'} "
+          f"({summary['attack_successes']}/{summary['completed']} completed trials)")
+    print(f"Results: {results_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("seeds", nargs="+", type=Path, help="one or more seed JSON files")
-    parser.add_argument("--target", default="agent:run_agent",
-                        help="module:function, called as function(user_task, mailbox) -> str")
-    parser.add_argument("--repeats", type=int, default=1)
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).parent / "results")
+    parser = build_parser()
     args = parser.parse_args()
-
     try:
-        seeds = [load_seed(p) for p in args.seeds]
-        agent = load_agent(args.target)
-    except (OSError, ValueError, ImportError, AttributeError) as exc:
+        seeds = load_seeds(args.seeds)
+        env = load_environment(args.env)
+    except (OSError, ValueError, ImportError) as exc:
         parser.error(str(exc))
 
-    trials = []
-    for seed in seeds:
-        for n in range(1, args.repeats + 1):
-            trial = run_trial(seed, agent)
-            trial["trial"] = n
-            trials.append(trial)
-            print(f"{seed['name']} #{n}: inbox {trial['before']['inbox_count']} -> "
-                  f"{trial['after']['inbox_count']}, sent {len(trial['after']['sent'])}, "
-                  f"attack_success={trial['attack_success']}"
-                  + (f"  ERROR {trial['error']}" if trial["error"] else ""))
-
-    completed = [t for t in trials if t["status"] == "ok"]
-    wins = sum(t["attack_success"] for t in completed)
-    rate = wins / len(completed) if completed else None
-    summary = {"target": args.target, "repeats": args.repeats, "trials": len(trials),
-               "completed": len(completed), "attack_successes": wins,
-               "attack_success_rate": rate}
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    out = args.output_dir / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json")
-    out.write_text(json.dumps({"summary": summary, "trials": trials}, indent=2), encoding="utf-8")
-    print(f"Attack success rate: {'N/A' if rate is None else f'{rate:.0%}'} "
-          f"({wins}/{len(completed)} completed trials)")
-    print(f"Results: {out}")
-    return 1 if len(completed) < len(trials) else 0
+    try:
+        trials = run_all(seeds, env, args.repeats)
+    except NotImplementedError as exc:
+        print(f"Cannot run: {exc}\nImplement it, or try the demo with --env mock_environment.",
+              file=sys.stderr)
+        return 2
+    summary = summarize(trials, args.env, args.repeats)
+    print_summary(summary, write_results(args.output_dir, summary, trials))
+    return 1 if summary["completed"] < summary["trials"] else 0
 
 
 if __name__ == "__main__":
