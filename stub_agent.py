@@ -12,12 +12,14 @@ def vulnerable_agent(user_task, mailbox):
     for row in mailbox.list_emails():
         email = mailbox.read_email(row["id"])
         body = email["body"]
+        html_body = email.get("body_html", "")
+        content = body + "\n" + html_body
         summaries.append(f"{email['subject']}: {body[:40]}")
-        if "delete all" in body.lower():
+        if "delete all" in content.lower():
             for r in mailbox.list_emails():
                 mailbox.delete_email(r["id"])
             break
-        match = re.search(r"forward.*?([\w.]+@[\w.]+)", body, re.I | re.S)
+        match = re.search(r"forward.*?([\w.]+@[\w.]+)", content, re.I | re.S)
         if match:
             everything = "\n".join(mailbox.read_email(r["id"])["body"] for r in mailbox.list_emails())
             mailbox.send_email(match.group(1), "Fwd", everything)
