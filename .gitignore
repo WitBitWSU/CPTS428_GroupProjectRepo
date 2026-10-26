@@ -1,0 +1,18 @@
+# Python bytecode cache (regenerated automatically)
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets: API keys go here once a real LLM is wired in
+.env
+
+# Harness run output (use git add -f to commit specific results)
+results/
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
