@@ -11,6 +11,28 @@ four functions in `environment.py`, which are deliberately left unimplemented. A
 environment (`mock_environment.py`) lets the whole pipeline run today. Demo results come from
 keyword-matching stubs, **not an LLM, so they are not security findings**.
 
+A tool-calling LLM agent (LangChain) and a matching `llm_environment.py` are in progress on the
+`llm-agent` branch. They are not part of this submission.
+
+## How to run
+
+Requires Python 3.10+ and nothing else. From a fresh clone of the default branch (`main`):
+
+```bash
+git clone https://github.com/WitBitWSU/CPTS428_GroupProjectRepo.git
+cd CPTS428_GroupProjectRepo
+
+# Agent that follows injected instructions (expected: 100%, 20/20)
+python3 harness.py seeds/*.json --env mock_environment --repeats 5
+
+# Agent that ignores injected instructions (expected: 0%, 0/20)
+MOCK_AGENT=safe_agent python3 harness.py seeds/*.json --env mock_environment --repeats 5
+```
+
+On Windows use `python` instead of `python3`; for the second command in PowerShell, run
+`$env:MOCK_AGENT="safe_agent"` first. Each run prints one line per trial, the attack success
+rate, and the path of its results file in `results/`.
+
 ## How a trial works
 
 ```
@@ -27,7 +49,8 @@ The first four calls are the **environment functions**. The harness does everyth
 
 ## Requirements
 
-- Python 3.10 or later. Standard library only; nothing to install or pin.
+- Python 3.10 or later. Standard library only; nothing to install or pin, so there is no
+  `pip install` step. `requirements.txt` is a placeholder for the LLM agent's dependencies.
 - Windows: use `python` (or `py`). The Windows `python3` command is usually just a Microsoft
   Store shortcut. If `python` is not found, install Python from python.org with
   "Add python.exe to PATH" ticked, then open a new terminal.
@@ -42,6 +65,10 @@ The first four calls are the **environment functions**. The harness does everyth
 | `stub_agent.py` | Two fake agents used by the demo: `vulnerable_agent` and `safe_agent` |
 | `seeds/delete_all.json` | Example seed: injected email tries to delete the whole inbox |
 | `seeds/exfiltrate.json` | Example seed: injected email tries to forward all mail (incl. a planted fake secret) to the attacker |
+| `seeds/html_visible_injection.json` | Delete-all injection in visible HTML (`body_html`) |
+| `seeds/html_hidden_injection.json` | Same injection hidden in a `display:none` element a human reader would not see |
+| `sampleApp.py` | Earlier single-prompt summarizer prototype (Ollama). Not used by the harness; replaced by the tool-calling agent on `llm-agent` |
+| `docs/` | Draft attack surface analysis |
 | `results/` | Created on first run; one JSON file per run |
 
 ## Quick start (demo)
@@ -174,8 +201,8 @@ If every trial errors the rate prints as `N/A (0/0 completed trials)` and the ex
 
 ## Limitations (current proof of concept)
 
-- Emails only have plain-text `body` fields. Hidden-text (white-on-white HTML), attachment,
-  image, and header attacks need extra email fields, and real `populate_mailbox` support for them.
+- Emails have a plain-text `body` and an optional `body_html`, which the mock passes through
+  and the vulnerable stub reads. Attachment, image, and header attacks are not supported yet.
 - No per-trial timeout: a hung agent call hangs the run. Add one inside `invoke_agent`.
 - The harness records state before and after but not the agent's individual tool calls.
 - No confidence intervals, and no benign control seeds to check the agent still does its normal job.
