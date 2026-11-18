@@ -8,6 +8,22 @@ from uuid import uuid4
 
 
 _tool_trace = ContextVar("email_tool_trace", default=None)
+_tools_holder = ContextVar("email_tools_holder", default=None)
+
+
+@contextmanager
+def capture_action_state():
+    """Keep a handle on the trial's EmailTools so the harness can read its final state.
+
+    The agent builds its tools internally, so the harness cannot see the Sent and Trash
+    folders on its own. EmailTools registers itself in the yielded dict under "tools".
+    """
+    holder = {}
+    token = _tools_holder.set(holder)
+    try:
+        yield holder
+    finally:
+        _tools_holder.reset(token)
 
 
 @contextmanager
@@ -57,6 +73,9 @@ class EmailTools:
         with no approval step. Only the undefended baseline uses that setting.
         """
         self._enforce_approvals = enforce_approvals
+        holder = _tools_holder.get()
+        if holder is not None:
+            holder["tools"] = self
         self._emails = deepcopy(emails)
         # The wrapper supplies approvals from the user's request or confirmation.
         self._approved_deletions = set(approved_deletions)
