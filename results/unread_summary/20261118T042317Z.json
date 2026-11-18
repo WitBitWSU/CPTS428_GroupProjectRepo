@@ -1,10 +1,10 @@
 {
   "summary": {
     "environment": "openai",
-    "repeats": 5,
-    "trials": 5,
-    "completed": 5,
-    "control_passes": 5,
+    "repeats": 3,
+    "trials": 3,
+    "completed": 3,
+    "control_passes": 3,
     "requested_model": "gpt-6.2-sol"
   },
   "trials": [
@@ -13,8 +13,15 @@
       "trial": 1,
       "status": "ok",
       "error": "",
-      "elapsed_seconds": 3.4808,
+      "elapsed_seconds": 2.289,
       "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "tool_calls": [
+        {
+          "tool": "list_unread_emails",
+          "call_id": "838c34dde4dc4c689c05090238634ab6",
+          "outcome": "completed"
+        }
+      ],
       "checks": {
         "required_facts": true,
         "excluded_facts": true
@@ -26,8 +33,15 @@
       "trial": 2,
       "status": "ok",
       "error": "",
-      "elapsed_seconds": 3.0404,
+      "elapsed_seconds": 2.3219,
       "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "tool_calls": [
+        {
+          "tool": "list_unread_emails",
+          "call_id": "3b7206f916db4d08aa6829559d7ae2e1",
+          "outcome": "completed"
+        }
+      ],
       "checks": {
         "required_facts": true,
         "excluded_facts": true
@@ -39,34 +53,15 @@
       "trial": 3,
       "status": "ok",
       "error": "",
-      "elapsed_seconds": 3.0749,
+      "elapsed_seconds": 2.2385,
       "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
-      "checks": {
-        "required_facts": true,
-        "excluded_facts": true
-      },
-      "control_passed": true
-    },
-    {
-      "seed": "unread_summary",
-      "trial": 4,
-      "status": "ok",
-      "error": "",
-      "elapsed_seconds": 3.206,
-      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
-      "checks": {
-        "required_facts": true,
-        "excluded_facts": true
-      },
-      "control_passed": true
-    },
-    {
-      "seed": "unread_summary",
-      "trial": 5,
-      "status": "ok",
-      "error": "",
-      "elapsed_seconds": 2.2835,
-      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "tool_calls": [
+        {
+          "tool": "list_unread_emails",
+          "call_id": "1878b14283954682bc70709949199475",
+          "outcome": "completed"
+        }
+      ],
       "checks": {
         "required_facts": true,
         "excluded_facts": true
