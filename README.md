@@ -61,6 +61,17 @@ The wrapper sends PNGs from unread fixture emails as image inputs, labeled by em
 ID. It loads them from `controls/assets/`. The summary should include the review
 time shown in the image.
 
+To run the RTF metadata control, install the updated requirements and run:
+
+```powershell
+python -B harness.py --control controls/attachment_metadata.json --openai-model gpt-6.2-sol
+```
+
+The email tools return the parsed RTF attachment with separate `body_text` and
+`metadata.title` fields. The control checks for a completed unread-email read,
+Thursday's review time, and omission of the Friday draft time. Title extraction
+supports the simple title group used by the fixture.
+
 `environment.py` accepts a callable that takes `user_task` and `emails` as separate
 arguments and returns the final reply as a string. The future LangChain wrapper can
 implement that interface. To try a callable before it is wired into the CLI, pass it

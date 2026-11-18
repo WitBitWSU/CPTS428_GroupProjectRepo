@@ -15,6 +15,7 @@
   ],
   "expected_result": {
     "required_facts": ["Thursday at 3 p.m."],
-    "excluded_facts": ["Friday"]
+    "excluded_facts": ["Friday"],
+    "required_tools": ["list_unread_emails"]
   }
 }
