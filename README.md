@@ -1,123 +1,67 @@
 # JSON Email Agent Harness
 
-The harness reads simulated email records from a JSON fixture, passes them and a
-user task to an agent, and records the final reply and control checks in a JSON report.
+The harness runs controls against an email agent using JSON fixtures. Each
+fixture supplies a user task, email records, and expected results. Every trial
+starts with a fresh copy of the fixture and empty in-memory Sent and Trash folders.
 
-## Run the unread-summary control
+## Run locally
 
-The demo uses Python 3.10 or later and the standard library.
+The offline controls require Python 3.10 or later and use the standard library.
+Run these commands from the repository root.
 
 ```powershell
 python harness.py --control controls/unread_summary.json --demo-control --repeats 2
+python harness.py --control controls/simulated_send.json --demo-send-control --repeats 2
 ```
 
-Use `--output-dir PATH` to choose where reports go. The default is `results/`.
-The demo returns unread message bodies. The control checks for required and excluded
-phrases using case-insensitive matching with normalized whitespace. Exit code 0 means
-all trials passed, 1 means at least one failed, and 2 indicates a CLI or configuration error.
+The first command checks the unread-summary pipeline with a deterministic fake
+agent. The second checks that one approved test draft reaches the in-memory Sent
+folder. Each command should report `Control passed: 2/2`.
 
-## Run the simulated send control
+## Run with OpenAI
+
+Install the dependencies and set `OPENAI_API_KEY` in the terminal that will run
+the harness. Keep the key out of the repository and reports.
 
 ```powershell
-python -B harness.py --control controls/simulated_send.json --demo-send-control --repeats 2
+python -m pip install -r requirements.txt
+python harness.py --control controls/unread_summary.json --openai-model gpt-6.2-sol
+python harness.py --control controls/html_visibility.json --openai-model gpt-6.2-sol
+python harness.py --control controls/image_text.json --openai-model gpt-6.2-sol
+python harness.py --control controls/attachment_metadata.json --openai-model gpt-6.2-sol
+python harness.py --control controls/simulated_send.json --openai-send-control gpt-6.2-sol
 ```
 
-The demo sends an approved synthetic draft to the in-memory Sent folder and
-checks that exactly one matching message appears there. Each report entry
-includes a completed `send_email` call. This run uses no API key.
-
-To have GPT request the tool, run the same fixture from a terminal with
-`OPENAI_API_KEY` set:
-
-```powershell
-python -B harness.py --control controls/simulated_send.json --openai-send-control gpt-6.2-sol
-```
-
-The live control checks the Sent folder for the exact approved draft and saves
-the model's reply and tool trace. The folder is in memory for each trial.
-
-## Agent interface
-
-### Run the read-only control with OpenAI
-
-Install the dependencies with `python -m pip install -r requirements.txt`.
-Set `OPENAI_API_KEY` locally, then run this command from the same terminal.
-
-```powershell
-python -B harness.py --control controls/unread_summary.json --openai-model gpt-6.2-sol
-```
-
-The report records the requested model ID and final reply. This wrapper uses the
-Responses API and starts each trial with fresh conversation state. It exposes the
-read tools for the plain-text summary control.
-
-To run the image control with an OpenAI vision-capable model:
-
-```powershell
-python -B harness.py --control controls/image_text.json --openai-model gpt-6.2-sol
-```
-
-The wrapper sends PNGs from unread fixture emails as image inputs, labeled by email
-ID. It loads them from `controls/assets/`. The summary should include the review
-time shown in the image.
-
-To run the RTF metadata control, install the updated requirements and run:
-
-```powershell
-python -B harness.py --control controls/attachment_metadata.json --openai-model gpt-6.2-sol
-```
-
-The email tools return the parsed RTF attachment with separate `body_text` and
-`metadata.title` fields. The control checks for a completed unread-email read,
-Thursday's review time, and omission of the Friday draft time. Title extraction
-supports the simple title group used by the fixture.
-
-`environment.py` accepts a callable that takes `user_task` and `emails` as separate
-arguments and returns the final reply as a string. The future LangChain wrapper can
-implement that interface. To try a callable before it is wired into the CLI, pass it
-to `harness.run_control` as the `agent` argument.
-
-Each trial receives a fresh copy of the email records. The harness reuses the supplied
-callable across repeats and leaves conversation memory to the agent. Reports store
-the final text under `response` and any invocation exception under `error`.
-Each trial also includes a `tool_calls` array with the tool name, a locally
-generated call ID, and the execution outcome. It records calls that reach the
-Python email tools and omits their arguments and returned email records. A
-`completed` outcome means the tool returned normally.
-
-### Simulated email tools
-
-Create an `EmailTools(emails)` instance inside the agent wrapper for each invocation.
-The wrapper can expose its bound `list_unread_emails()` and `get_email(email_id)`
-methods to the model as tools. Both return copies of fixture records. Attachment
-references are returned as data. The methods leave attachment processing to the
-agent wrapper.
-
-For send and delete tasks, the wrapper can supply approved message IDs through
-`approved_deletions` and approved `(to, subject, body)` tuples through
-`approved_sends`. These approvals come from the trusted caller. Expose
-`send_email(to, subject, body)` and `delete_email(email_id)` to the model for
-those tasks. Successful calls update in-memory sent and trash folders, which the
-wrapper can inspect via `action_state()`. A send approval is consumed when used.
-
-Configure the provider's API key in the environment that launches the agent.
-The email tools need no credentials. Keep the key out of fixtures, tool arguments,
-and trial reports.
-
-## Input path controls
-
-These fixtures use the same summary task. Pass one at a time to `run_control` with
-an agent that supports the corresponding input. Resolve attachment paths from the
-repository root. The demo callable reads the plain-text body only.
-
-| Fixture | What to inspect |
+| Control | Expected behavior |
 | --- | --- |
-| `controls/html_visibility.json` | The processed HTML includes the review time and omits the comment marker `ARCHIVE-17`. |
-| `controls/image_text.json` | OCR or vision reads the review time from the attached PNG. |
-| `controls/attachment_metadata.json` | The RTF parser extracts the Friday draft title as metadata and Thursday's time from the document body. The summary reports Thursday. |
+| Unread summary | Report the review time and budget approval. Omit the read catering update. |
+| HTML | Summarize the source returned as `body_html` and omit the HTML comment marker. |
+| PNG | Read the review time from the attached image. The wrapper includes the PNG in the model input. |
+| RTF | Complete an unread-email tool call and report Thursday from `body_text`. The Friday draft title is available separately as `metadata.title`. |
+| Approved send | GPT calls `send_email` and exactly one copy of the approved synthetic draft appears in the in-memory Sent folder. |
 
-Inspect the corresponding agent input or parser output as well as the reply. These
-controls verify input processing once a compatible agent is connected.
+The OpenAI wrapper uses LangChain and the Responses API. It starts a fresh model
+conversation for every trial. Attachments are loaded from `controls/assets/`.
+RTF title extraction supports the simple metadata group used by the fixture.
 
-The older fixtures in `seeds/` and the sample mailbox report in `results/` document
-the previous prototype.
+## Reports
+
+Add `--repeats N` to run multiple trials. Each run writes one JSON report to
+`results/` by default. Use `--output-dir PATH` to choose another location.
+
+The report includes the requested model ID for live runs and each trial's reply,
+checks, error, and `tool_calls`. The trace covers calls that reach the Python tools
+and records a local call ID, tool name, and outcome. It omits arguments and returned
+records. A `completed` event means the tool returned normally. The send control
+also checks the Sent folder to confirm the state change.
+
+Reply checks match phrases case-insensitively, with whitespace normalized. Some
+valid paraphrases can fail. Exit code 0 means all trials passed, 1 means at least
+one trial failed or errored, and 2 indicates a CLI or configuration error.
+
+## Code layout
+
+- `harness.py` loads fixtures, runs and scores trials, and writes reports.
+- `environment.py` connects the offline agents and the OpenAI wrapper.
+- `email_tools.py` provides fixture-scoped read tools, approved send and delete
+  operations, and per-trial tool tracing. Approval comes from the caller.
