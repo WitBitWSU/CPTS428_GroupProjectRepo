@@ -10,14 +10,16 @@ from pathlib import Path
 
 from email_tools import capture_tool_calls
 
+
 def build_parser():
+    """Define the CLI and make the demo and provider modes mutually exclusive."""
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--control", type=Path, required=True,
                         help="JSON fixture for a control trial")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--demo-control", action="store_true",
-                        help="use the deterministic fake agent for the control")
+                      help="use the deterministic fake agent for the control")
     mode.add_argument("--demo-send-control", action="store_true",
                       help="verify an approved send in the in-memory simulator")
     mode.add_argument("--openai-model", metavar="MODEL_ID",
@@ -30,6 +32,7 @@ def build_parser():
 
 
 def write_results(output_dir, summary, trials):
+    """Write one timestamped JSON report for the entire run."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ".json")
     path.write_text(json.dumps({"summary": summary, "trials": trials}, indent=2), encoding="utf-8")
@@ -37,9 +40,7 @@ def write_results(output_dir, summary, trials):
 
 
 def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
-    """Run the JSON-only control and store each final reply in the standard report."""
-    from environment import invoke_json_agent
-
+    """Run and score each trial, then return an exit code for the whole run."""
     fixture = json.loads(path.read_text(encoding="utf-8"))
     expected = fixture["expected_result"]
     if agent is None:
@@ -51,14 +52,17 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
         with capture_tool_calls() as tool_calls:
             try:
                 # A fresh copy prevents an agent from changing the next trial's input.
-                response = invoke_json_agent(fixture["user_task"], deepcopy(fixture["emails"]),
-                                             agent=agent)
+                reply = agent(fixture["user_task"], deepcopy(fixture["emails"]))
+                if not isinstance(reply, str):
+                    raise TypeError("The JSON agent must return its final reply as text")
+                response = reply
             except Exception as exc:
+                # Keep the trace and continue running the remaining trials.
                 error = f"{type(exc).__name__}: {exc}"
 
         checks = {}
         if not error:
-            # Phrase checks verify the deterministic demo. Semantic scoring can come later.
+            # Use case-insensitive substring checks with normalized whitespace.
             normalized = " ".join(response.casefold().split())
             checks = {
                 "required_facts": all(" ".join(fact.casefold().split()) in normalized
@@ -90,6 +94,7 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
 
 
 def main():
+    """Select an agent from the CLI options and run the requested fixture."""
     from environment import build_openai_control_agent, demo_simulated_send, demo_unread_summary
 
     parser = build_parser()

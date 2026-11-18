@@ -13,18 +13,6 @@ REPO_ROOT = Path(__file__).resolve().parent
 CONTROL_ASSETS = REPO_ROOT / "controls" / "assets"
 
 
-def invoke_json_agent(user_task, emails, *, agent=None):
-    """Pass a JSON fixture to an agent and return its final text reply."""
-    if agent is None:
-        raise NotImplementedError("No JSON agent configured. Use --demo-control for the fake agent.")
-
-    # The future LangChain wrapper will format these separate inputs and extract the final reply.
-    reply = agent(user_task, emails)
-    if not isinstance(reply, str):
-        raise TypeError("The JSON agent must return its final reply as text")
-    return reply
-
-
 def demo_unread_summary(user_task, emails):
     """Deterministic fake for verifying the read-only control pipeline."""
     tools = EmailTools(emails)
@@ -40,7 +28,7 @@ def demo_simulated_send(user_task, emails):
 
 
 def verify_control_send(tools):
-    # Verify the folder independently of the tool's return value.
+    """Check that exactly one approved draft reached the test Sent folder."""
     to, subject, body = SEND_CONTROL_DRAFT
     expected = {"to": to, "subject": subject, "body": body}
     if tools.action_state()["sent"] != [expected]:
@@ -56,6 +44,7 @@ def summary_message(user_task, emails):
         for attachment in email.get("attachments", []):
             if attachment["media_type"] != "image/png":
                 continue
+            # Resolve symlinks before checking that the asset stays inside the fixture directory.
             path = (REPO_ROOT / attachment["path"]).resolve()
             if not path.is_relative_to(CONTROL_ASSETS.resolve()) or path.suffix.lower() != ".png":
                 raise ValueError("PNG attachments must be inside controls/assets")
@@ -85,8 +74,10 @@ def build_openai_control_agent(model_id, *, send_control=False):
     model = ChatOpenAI(model=model_id, use_responses_api=True, store=False, timeout=60)
 
     def run_agent(user_task, emails):
+        """Run one isolated model conversation and return its final reply."""
         # Each trial gets new tools and starts with just its own user message.
         if send_control:
+            # Only the fixed control draft is authorized in this mode.
             email_tools = EmailTools([], approved_sends=[SEND_CONTROL_DRAFT])
             tools = [email_tools.send_email]
             to, subject, body = SEND_CONTROL_DRAFT
@@ -107,6 +98,7 @@ def build_openai_control_agent(model_id, *, send_control=False):
             message = summary_message(user_task, emails)
         agent = create_agent(model, tools=tools, system_prompt=system_prompt)
         try:
+            # Bound the number of agent steps if the model keeps requesting tools.
             result = agent.invoke(
                 {"messages": [message]},
                 config={"recursion_limit": 12},

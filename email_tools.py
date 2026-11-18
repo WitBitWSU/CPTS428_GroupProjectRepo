@@ -23,6 +23,7 @@ def capture_tool_calls():
 
 def trace_tool(method):
     """Record an outcome at the tool boundary without storing arguments or results."""
+    # Preserve the method's name, signature, and docstring for LangChain's tool schema.
     @wraps(method)
     def invoke(*args, **kwargs):
         events = _tool_trace.get()
@@ -46,9 +47,10 @@ def trace_tool(method):
 
 
 class EmailTools:
-    """Bind tool calls to one fixture's email records."""
+    """Own one trial's inbox, sent messages, trash, and action approvals."""
 
     def __init__(self, emails, *, approved_deletions=(), approved_sends=()):
+        """Copy fixture inputs and start with empty Sent and Trash folders."""
         self._emails = deepcopy(emails)
         # The wrapper supplies approvals from the user's request or confirmation.
         self._approved_deletions = set(approved_deletions)
@@ -91,11 +93,12 @@ class EmailTools:
 
         for index, email in enumerate(self._emails):
             if email["id"] == email_id:
+                # Move the record and consume approval only when the message exists.
                 self._trash.append(self._emails.pop(index))
                 self._approved_deletions.remove(email_id)
                 return True
         return False
 
     def action_state(self) -> dict:
-        """Return a snapshot for the wrapper or the harness."""
+        """Copy Sent and Trash so report callers cannot change simulator state."""
         return deepcopy({"sent": self._sent, "trash": self._trash})
