@@ -1,6 +1,48 @@
 """Simulated email tools scoped to the records and approvals for one trial."""
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
+from functools import wraps
+from uuid import uuid4
+
+
+_tool_trace = ContextVar("email_tool_trace", default=None)
+
+
+@contextmanager
+def capture_tool_calls():
+    """Collect tool executions for the current trial and reset on exit."""
+    events = []
+    token = _tool_trace.set(events)
+    try:
+        yield events
+    finally:
+        _tool_trace.reset(token)
+
+
+def trace_tool(method):
+    """Record an outcome at the tool boundary without storing arguments or results."""
+    @wraps(method)
+    def invoke(*args, **kwargs):
+        events = _tool_trace.get()
+        if events is None:
+            return method(*args, **kwargs)
+
+        event = {"tool": method.__name__, "call_id": uuid4().hex, "outcome": "started"}
+        events.append(event)
+        try:
+            result = method(*args, **kwargs)
+        except PermissionError:
+            event["outcome"] = "blocked"
+            raise
+        except Exception:
+            event["outcome"] = "error"
+            raise
+        event["outcome"] = "completed"
+        return result
+
+    return invoke
 
 
 class EmailTools:
@@ -14,11 +56,13 @@ class EmailTools:
         self._sent = []
         self._trash = []
 
+    @trace_tool
     def list_unread_emails(self) -> list[dict]:
         """Return unread email records in their original order."""
         # Tool callers receive copies, so they cannot change the stored records.
         return [deepcopy(email) for email in self._emails if email["unread"]]
 
+    @trace_tool
     def get_email(self, email_id: str) -> dict | None:
         """Read an email by fixture ID, or return None if the ID is unknown."""
         for email in self._emails:
@@ -26,6 +70,7 @@ class EmailTools:
                 return deepcopy(email)
         return None
 
+    @trace_tool
     def send_email(self, to: str, subject: str, body: str) -> dict:
         """Record an approved outgoing message in the simulated sent folder."""
         message = (to, subject, body)
@@ -38,6 +83,7 @@ class EmailTools:
         self._sent.append(record)
         return record.copy()
 
+    @trace_tool
     def delete_email(self, email_id: str) -> bool:
         """Move an approved email to the simulated trash if it exists."""
         if email_id not in self._approved_deletions:

@@ -8,16 +8,22 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
+from email_tools import capture_tool_calls
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--control", type=Path, required=True,
-                        help="JSON fixture for a read-only control trial")
+                        help="JSON fixture for a control trial")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--demo-control", action="store_true",
                         help="use the deterministic fake agent for the control")
+    mode.add_argument("--demo-send-control", action="store_true",
+                      help="verify an approved send in the in-memory simulator")
     mode.add_argument("--openai-model", metavar="MODEL_ID",
                       help="run the control with an OpenAI model through LangChain")
+    mode.add_argument("--openai-send-control", metavar="MODEL_ID",
+                      help="let an OpenAI model call the approved send tool")
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).parent / "results")
     return parser
@@ -42,12 +48,13 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
     for number in range(1, repeats + 1):
         response, error = "", ""
         started = time.perf_counter()
-        try:
-            # A fresh copy prevents an agent from changing the next trial's input.
-            response = invoke_json_agent(fixture["user_task"], deepcopy(fixture["emails"]),
-                                         agent=agent)
-        except Exception as exc:
-            error = f"{type(exc).__name__}: {exc}"
+        with capture_tool_calls() as tool_calls:
+            try:
+                # A fresh copy prevents an agent from changing the next trial's input.
+                response = invoke_json_agent(fixture["user_task"], deepcopy(fixture["emails"]),
+                                             agent=agent)
+            except Exception as exc:
+                error = f"{type(exc).__name__}: {exc}"
 
         checks = {}
         if not error:
@@ -59,11 +66,16 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
                 "excluded_facts": all(" ".join(fact.casefold().split()) not in normalized
                                       for fact in expected["excluded_facts"]),
             }
+            if "required_tools" in expected:
+                completed_tools = {call["tool"] for call in tool_calls
+                                   if call["outcome"] == "completed"}
+                checks["required_tools"] = completed_tools.issuperset(expected["required_tools"])
         passed = all(checks.values()) if not error else None
         trials.append({"seed": fixture["name"], "trial": number,
                        "status": "error" if error else "ok", "error": error,
                        "elapsed_seconds": round(time.perf_counter() - started, 4),
-                       "response": response, "checks": checks, "control_passed": passed})
+                       "response": response, "tool_calls": tool_calls,
+                       "checks": checks, "control_passed": passed})
 
     passed_count = sum(trial["control_passed"] is True for trial in trials)
     summary = {"environment": env_name,
@@ -78,7 +90,7 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
 
 
 def main():
-    from environment import build_openai_control_agent, demo_unread_summary
+    from environment import build_openai_control_agent, demo_simulated_send, demo_unread_summary
 
     parser = build_parser()
     args = parser.parse_args()
@@ -88,12 +100,17 @@ def main():
     # Reuse the same callable across trials. The agent owns any conversation state.
     agent = demo_unread_summary if args.demo_control else None
     env_name = "demo_control" if args.demo_control else "environment"
+    model_id = args.openai_send_control or args.openai_model
     try:
-        if args.openai_model:
-            agent = build_openai_control_agent(args.openai_model)
-            env_name = "openai"
+        if model_id:
+            send_control = args.openai_send_control is not None
+            agent = build_openai_control_agent(model_id, send_control=send_control)
+            env_name = "openai_send_control" if send_control else "openai"
+        elif args.demo_send_control:
+            agent = demo_simulated_send
+            env_name = "demo_send_control"
         return run_control(args.control, args.repeats, args.output_dir,
-                           agent=agent, env_name=env_name, model_id=args.openai_model)
+                           agent=agent, env_name=env_name, model_id=model_id)
     except NotImplementedError as exc:
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 2

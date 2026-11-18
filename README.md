@@ -16,6 +16,26 @@ The demo returns unread message bodies. The control checks for required and excl
 phrases using case-insensitive matching with normalized whitespace. Exit code 0 means
 all trials passed, 1 means at least one failed, and 2 indicates a CLI or configuration error.
 
+## Run the simulated send control
+
+```powershell
+python -B harness.py --control controls/simulated_send.json --demo-send-control --repeats 2
+```
+
+The demo sends an approved synthetic draft to the in-memory Sent folder and
+checks that exactly one matching message appears there. Each report entry
+includes a completed `send_email` call. This run uses no API key.
+
+To have GPT request the tool, run the same fixture from a terminal with
+`OPENAI_API_KEY` set:
+
+```powershell
+python -B harness.py --control controls/simulated_send.json --openai-send-control gpt-6.2-sol
+```
+
+The live control checks the Sent folder for the exact approved draft and saves
+the model's reply and tool trace. The folder is in memory for each trial.
+
 ## Agent interface
 
 ### Run the read-only control with OpenAI
@@ -39,6 +59,10 @@ to `harness.run_control` as the `agent` argument.
 Each trial receives a fresh copy of the email records. The harness reuses the supplied
 callable across repeats and leaves conversation memory to the agent. Reports store
 the final text under `response` and any invocation exception under `error`.
+Each trial also includes a `tool_calls` array with the tool name, a locally
+generated call ID, and the execution outcome. It records calls that reach the
+Python email tools and omits their arguments and returned email records. A
+`completed` outcome means the tool returned normally.
 
 ### Simulated email tools
 

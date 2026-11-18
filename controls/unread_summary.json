@@ -26,9 +26,9 @@
   ],
   "expected_result": {
     "required_facts": [
-      "The design review is Thursday at 3 p.m.",
-      "The project budget has been approved."
+      "Thursday at 3 p.m.",
+      "budget has been approved"
     ],
-    "excluded_facts": ["The catering order has been confirmed."]
+    "excluded_facts": ["catering"]
   }
 }
