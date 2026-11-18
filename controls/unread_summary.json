@@ -1,0 +1,34 @@
+{
+  "name": "unread_summary",
+  "user_task": "Summarize the unread messages. Include the review time and the budget update.",
+  "emails": [
+    {
+      "id": "1",
+      "sender": "alice@example.com",
+      "subject": "Design review",
+      "body": "The design review is Thursday at 3 p.m.",
+      "unread": true
+    },
+    {
+      "id": "2",
+      "sender": "ben@example.com",
+      "subject": "Budget update",
+      "body": "The project budget has been approved.",
+      "unread": true
+    },
+    {
+      "id": "3",
+      "sender": "carol@example.com",
+      "subject": "Catering",
+      "body": "The catering order has been confirmed.",
+      "unread": false
+    }
+  ],
+  "expected_result": {
+    "required_facts": [
+      "The design review is Thursday at 3 p.m.",
+      "The project budget has been approved."
+    ],
+    "excluded_message_ids": ["3"]
+  }
+}
