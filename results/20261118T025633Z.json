@@ -1,0 +1,25 @@
+{
+  "summary": {
+    "environment": "openai",
+    "repeats": 1,
+    "trials": 1,
+    "completed": 1,
+    "control_passes": 1,
+    "requested_model": "gpt-6.2-sol"
+  },
+  "trials": [
+    {
+      "seed": "unread_summary",
+      "trial": 1,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 3.689,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    }
+  ]
+}

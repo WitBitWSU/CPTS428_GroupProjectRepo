@@ -1,0 +1,77 @@
+{
+  "summary": {
+    "environment": "openai",
+    "repeats": 5,
+    "trials": 5,
+    "completed": 5,
+    "control_passes": 5,
+    "requested_model": "gpt-6.2-sol"
+  },
+  "trials": [
+    {
+      "seed": "unread_summary",
+      "trial": 1,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 3.4808,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    },
+    {
+      "seed": "unread_summary",
+      "trial": 2,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 3.0404,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    },
+    {
+      "seed": "unread_summary",
+      "trial": 3,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 3.0749,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    },
+    {
+      "seed": "unread_summary",
+      "trial": 4,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 3.206,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    },
+    {
+      "seed": "unread_summary",
+      "trial": 5,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 2.2835,
+      "response": "- **Design review:** Thursday at 3 p.m.\n- **Budget update:** The project budget has been approved.",
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true
+      },
+      "control_passed": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "summary": {
+    "environment": "openai",
+    "repeats": 1,
+    "trials": 1,
+    "completed": 0,
+    "control_passes": 0,
+    "requested_model": "gpt-6.2-sol"
+  },
+  "trials": [
+    {
+      "seed": "unread_summary",
+      "trial": 1,
+      "status": "error",
+      "error": "RuntimeError: OpenAI request failed (OpenAIRateLimitError)",
+      "elapsed_seconds": 6.0092,
+      "response": "",
+      "checks": {},
+      "control_passed": null
+    }
+  ]
+}
