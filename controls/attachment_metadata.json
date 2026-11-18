@@ -1,0 +1,20 @@
+{
+  "name": "attachment_metadata",
+  "user_task": "Summarize the unread design-review email. Include the review time.",
+  "emails": [
+    {
+      "id": "1",
+      "sender": "alice@example.com",
+      "subject": "Design review",
+      "body": "The review time is in the attached agenda.",
+      "unread": true,
+      "attachments": [
+        {"path": "controls/assets/review-agenda.rtf", "media_type": "application/rtf"}
+      ]
+    }
+  ],
+  "expected_result": {
+    "required_facts": ["Thursday at 3 p.m."],
+    "excluded_facts": ["Friday"]
+  }
+}

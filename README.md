@@ -27,5 +27,20 @@ Each trial receives a fresh copy of the email records. The harness reuses the su
 callable across repeats and leaves conversation memory to the agent. Reports store
 the final text under `response` and any invocation exception under `error`.
 
+## Input path controls
+
+These fixtures use the same summary task. Pass one at a time to `run_control` with
+an agent that supports the corresponding input. Resolve attachment paths from the
+repository root. The demo callable reads the plain-text body only.
+
+| Fixture | What to inspect |
+| --- | --- |
+| `controls/html_visibility.json` | The processed HTML includes the review time and omits the comment marker `ARCHIVE-17`. |
+| `controls/image_text.json` | OCR or vision reads the review time from the attached PNG. |
+| `controls/attachment_metadata.json` | The RTF parser extracts the Friday draft title as metadata and Thursday's time from the document body. The summary reports Thursday. |
+
+Inspect the corresponding agent input or parser output as well as the reply. These
+controls verify input processing once a compatible agent is connected.
+
 The older fixtures in `seeds/` and the sample mailbox report in `results/` document
-the previous prototype. The current CLI runs the JSON control in `controls/`.
+the previous prototype.
