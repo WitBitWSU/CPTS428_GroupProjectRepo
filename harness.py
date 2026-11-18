@@ -35,6 +35,9 @@ def build_parser():
                       help="run the control with an Anthropic model through LangChain")
     mode.add_argument("--anthropic-send-control", metavar="MODEL_ID",
                       help="let an Anthropic model call the approved send tool")
+    parser.add_argument("--agent-mode", choices=("hardened", "baseline"), default="hardened",
+                        help="hardened: defended agent (default); baseline: undefended agent "
+                             "with send and delete tools and no approval checks")
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).parent / "results")
     return parser
@@ -57,7 +60,8 @@ def normalize_for_match(text):
     return " ".join(text.casefold().translate(MARKDOWN_MARKS).split())
 
 
-def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
+def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None,
+                agent_config=None):
     """Run and score each trial, then return an exit code for the whole run."""
     fixture = json.loads(path.read_text(encoding="utf-8"))
     expected = fixture["expected_result"]
@@ -106,6 +110,8 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
                "control_passes": passed_count}
     if model_id is not None:
         summary["requested_model"] = model_id
+    if agent_config is not None:
+        summary.update(agent_config)
     print(f"Control passed: {passed_count}/{len(trials)}")
     print(f"Results: {write_results(output_dir, summary, trials)}")
     return 0 if passed_count == len(trials) else 1
@@ -125,16 +131,16 @@ def selected_model(args):
     return None
 
 
-def run_all_controls(repeats, output_dir, provider, model_id):
+def run_all_controls(repeats, output_dir, provider, model_id, agent_mode):
     """Run each repository control and keep its report in a separate directory."""
-    from environment import CONTROL_AGENT_BUILDERS
+    from environment import CONTROL_AGENT_BUILDERS, agent_config
     build_agent = CONTROL_AGENT_BUILDERS[provider]
 
     paths = sorted(CONTROLS_DIR.glob("*.json"))
     if not paths:
         raise ValueError(f"No JSON control fixtures found in {CONTROLS_DIR}")
 
-    summary_agent = build_agent(model_id)
+    summary_agent = build_agent(model_id, agent_mode=agent_mode)
     send_agent = build_agent(model_id, send_control=True)
     statuses = []
     for path in paths:
@@ -147,6 +153,7 @@ def run_all_controls(repeats, output_dir, provider, model_id):
                 agent=send_agent if is_send else summary_agent,
                 env_name=f"{provider}_send_control" if is_send else provider,
                 model_id=model_id,
+                agent_config=None if is_send else agent_config(agent_mode),
             )
         except (OSError, ValueError, KeyError, TypeError) as exc:
             print(f"Could not run {path.name}: {exc}", file=sys.stderr)
@@ -159,7 +166,8 @@ def run_all_controls(repeats, output_dir, provider, model_id):
 
 def main():
     """Select an agent from the CLI options and run the requested fixture."""
-    from environment import CONTROL_AGENT_BUILDERS, demo_simulated_send, demo_unread_summary
+    from environment import (CONTROL_AGENT_BUILDERS, agent_config, demo_simulated_send,
+                             demo_unread_summary)
 
     parser = build_parser()
     args = parser.parse_args()
@@ -167,6 +175,9 @@ def main():
         parser.error("--repeats must be at least 1")
     if args.all_controls and not (args.openai_model or args.anthropic_model):
         parser.error("--all-controls requires --openai-model or --anthropic-model MODEL_ID")
+    if args.agent_mode == "baseline" and not (args.openai_model or args.anthropic_model):
+        parser.error("--agent-mode baseline needs --openai-model or --anthropic-model "
+                     "(--all-controls included); the send controls and demos do not use it")
 
     # Reuse the same callable across trials. The agent owns any conversation state.
     agent = demo_unread_summary if args.demo_control else None
@@ -175,15 +186,20 @@ def main():
     provider, model_id, send_control = choice if choice else (None, None, False)
     try:
         if args.all_controls:
-            return run_all_controls(args.repeats, args.output_dir, provider, model_id)
+            return run_all_controls(args.repeats, args.output_dir, provider, model_id,
+                                    args.agent_mode)
+        config = None
         if choice:
-            agent = CONTROL_AGENT_BUILDERS[provider](model_id, send_control=send_control)
+            agent = CONTROL_AGENT_BUILDERS[provider](model_id, send_control=send_control,
+                                                     agent_mode=args.agent_mode)
             env_name = f"{provider}_send_control" if send_control else provider
+            config = None if send_control else agent_config(args.agent_mode)
         elif args.demo_send_control:
             agent = demo_simulated_send
             env_name = "demo_send_control"
         return run_control(args.control, args.repeats, args.output_dir,
-                           agent=agent, env_name=env_name, model_id=model_id)
+                           agent=agent, env_name=env_name, model_id=model_id,
+                           agent_config=config)
     except NotImplementedError as exc:
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 2
