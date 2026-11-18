@@ -51,6 +51,16 @@ The report records the requested model ID and final reply. This wrapper uses the
 Responses API and starts each trial with fresh conversation state. It exposes the
 read tools for the plain-text summary control.
 
+To run the image control with an OpenAI vision-capable model:
+
+```powershell
+python -B harness.py --control controls/image_text.json --openai-model gpt-6.2-sol
+```
+
+The wrapper sends PNGs from unread fixture emails as image inputs, labeled by email
+ID. It loads them from `controls/assets/`. The summary should include the review
+time shown in the image.
+
 `environment.py` accepts a callable that takes `user_task` and `emails` as separate
 arguments and returns the final reply as a string. The future LangChain wrapper can
 implement that interface. To try a callable before it is wired into the CLI, pass it
