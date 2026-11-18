@@ -25,6 +25,17 @@ the harness. Keep the key out of the repository and reports.
 
 ```powershell
 python -m pip install -r requirements.txt
+python harness.py --all-controls --openai-model gpt-6.2-sol
+```
+
+The suite finds every JSON fixture directly under `controls/`. It runs the
+approved-send fixture with the send tool and the other fixtures with read-only
+tools. `--repeats N` applies to each fixture. Suite reports are written to
+`results/<fixture-name>/` by default.
+
+To rerun an individual control:
+
+```powershell
 python harness.py --control controls/unread_summary.json --openai-model gpt-6.2-sol
 python harness.py --control controls/html_visibility.json --openai-model gpt-6.2-sol
 python harness.py --control controls/image_text.json --openai-model gpt-6.2-sol

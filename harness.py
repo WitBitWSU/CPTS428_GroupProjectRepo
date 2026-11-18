@@ -11,12 +11,17 @@ from pathlib import Path
 from email_tools import capture_tool_calls
 
 
+CONTROLS_DIR = Path(__file__).resolve().parent / "controls"
+
+
 def build_parser():
     """Define the CLI and make the demo and provider modes mutually exclusive."""
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--control", type=Path, required=True,
-                        help="JSON fixture for a control trial")
+    fixtures = parser.add_mutually_exclusive_group(required=True)
+    fixtures.add_argument("--control", type=Path, help="JSON fixture for a control trial")
+    fixtures.add_argument("--all-controls", action="store_true",
+                          help="run every JSON fixture in controls/ with an OpenAI model")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--demo-control", action="store_true",
                       help="use the deterministic fake agent for the control")
@@ -93,6 +98,37 @@ def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
     return 0 if passed_count == len(trials) else 1
 
 
+def run_all_controls(repeats, output_dir, model_id):
+    """Run each repository control and keep its report in a separate directory."""
+    from environment import build_openai_control_agent
+
+    paths = sorted(CONTROLS_DIR.glob("*.json"))
+    if not paths:
+        raise ValueError(f"No JSON control fixtures found in {CONTROLS_DIR}")
+
+    summary_agent = build_openai_control_agent(model_id)
+    send_agent = build_openai_control_agent(model_id, send_control=True)
+    statuses = []
+    for path in paths:
+        # Only the built-in send control uses the fixed, approved outgoing draft.
+        is_send = path.name == "simulated_send.json"
+        print(f"Running {path.name}")
+        try:
+            status = run_control(
+                path, repeats, output_dir / path.stem,
+                agent=send_agent if is_send else summary_agent,
+                env_name="openai_send_control" if is_send else "openai",
+                model_id=model_id,
+            )
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"Could not run {path.name}: {exc}", file=sys.stderr)
+            status = 2
+        statuses.append(status)
+
+    print(f"Control fixtures passed: {statuses.count(0)}/{len(paths)}")
+    return max(statuses)
+
+
 def main():
     """Select an agent from the CLI options and run the requested fixture."""
     from environment import build_openai_control_agent, demo_simulated_send, demo_unread_summary
@@ -101,12 +137,16 @@ def main():
     args = parser.parse_args()
     if args.repeats < 1:
         parser.error("--repeats must be at least 1")
+    if args.all_controls and not args.openai_model:
+        parser.error("--all-controls requires --openai-model MODEL_ID")
 
     # Reuse the same callable across trials. The agent owns any conversation state.
     agent = demo_unread_summary if args.demo_control else None
     env_name = "demo_control" if args.demo_control else "environment"
     model_id = args.openai_send_control or args.openai_model
     try:
+        if args.all_controls:
+            return run_all_controls(args.repeats, args.output_dir, model_id)
         if model_id:
             send_control = args.openai_send_control is not None
             agent = build_openai_control_agent(model_id, send_control=send_control)
