@@ -1,5 +1,7 @@
 """Adapter for passing JSON email records to the agent."""
 
+from email_tools import EmailTools
+
 
 def invoke_json_agent(user_task, emails, *, agent=None):
     """Pass a JSON fixture to an agent and return its final text reply."""
@@ -15,4 +17,5 @@ def invoke_json_agent(user_task, emails, *, agent=None):
 
 def demo_unread_summary(user_task, emails):
     """Deterministic fake for verifying the read-only control pipeline."""
-    return " ".join(email["body"] for email in emails if email["unread"])
+    tools = EmailTools(emails)
+    return " ".join(email["body"] for email in tools.list_unread_emails())

@@ -27,6 +27,18 @@ Each trial receives a fresh copy of the email records. The harness reuses the su
 callable across repeats and leaves conversation memory to the agent. Reports store
 the final text under `response` and any invocation exception under `error`.
 
+### Read-only email tools
+
+Create an `EmailTools(emails)` instance inside the agent wrapper for each invocation.
+The wrapper can expose its bound `list_unread_emails()` and `get_email(email_id)`
+methods to the model as tools. Both return copies of fixture records. Attachment
+references are returned as data. The methods leave attachment processing to the
+agent wrapper.
+
+Configure the provider's API key in the environment that launches the agent.
+The email tools need no credentials. Keep the key out of fixtures, tool arguments,
+and trial reports.
+
 ## Input path controls
 
 These fixtures use the same summary task. Pass one at a time to `run_control` with
