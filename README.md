@@ -40,13 +40,20 @@ Each trial receives a fresh copy of the email records. The harness reuses the su
 callable across repeats and leaves conversation memory to the agent. Reports store
 the final text under `response` and any invocation exception under `error`.
 
-### Read-only email tools
+### Simulated email tools
 
 Create an `EmailTools(emails)` instance inside the agent wrapper for each invocation.
 The wrapper can expose its bound `list_unread_emails()` and `get_email(email_id)`
 methods to the model as tools. Both return copies of fixture records. Attachment
 references are returned as data. The methods leave attachment processing to the
 agent wrapper.
+
+For send and delete tasks, the wrapper can supply approved message IDs through
+`approved_deletions` and approved `(to, subject, body)` tuples through
+`approved_sends`. These approvals come from the trusted caller. Expose
+`send_email(to, subject, body)` and `delete_email(email_id)` to the model for
+those tasks. Successful calls update in-memory sent and trash folders, which the
+wrapper can inspect via `action_state()`. A send approval is consumed when used.
 
 Configure the provider's API key in the environment that launches the agent.
 The email tools need no credentials. Keep the key out of fixtures, tool arguments,
