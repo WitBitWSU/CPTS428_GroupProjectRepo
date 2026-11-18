@@ -83,8 +83,20 @@ function is not implemented.
 
 ## Command-line options
 
+Run the JSON-only unread-summary control with the deterministic fake agent:
+
+```powershell
+python harness.py --control controls/unread_summary.json --demo-control --repeats 2
+```
+
+The report stores each final reply in `response` and scores the required and excluded
+phrases using case-insensitive matching with normalized whitespace. The fake agent
+returns the unread message bodies, so this run verifies the control pipeline.
+
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `--control PATH` | optional | Run a read-only JSON control in a separate run from the seed files |
+| `--demo-control` | off | Use the deterministic fake agent for the control |
 | `seeds` (positional) | required | One or more seed JSON files; wildcards are expanded by the harness |
 | `--env MODULE` | `environment` | Module providing the four environment functions |
 | `--repeats N` | `1` | Trials per seed |

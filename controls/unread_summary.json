@@ -29,6 +29,6 @@
       "The design review is Thursday at 3 p.m.",
       "The project budget has been approved."
     ],
-    "excluded_message_ids": ["3"]
+    "excluded_facts": ["The catering order has been confirmed."]
   }
 }
