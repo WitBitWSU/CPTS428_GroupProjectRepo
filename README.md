@@ -18,6 +18,19 @@ all trials passed, 1 means at least one failed, and 2 indicates a CLI or configu
 
 ## Agent interface
 
+### Run the read-only control with OpenAI
+
+Install the dependencies with `python -m pip install -r requirements.txt`.
+Set `OPENAI_API_KEY` locally, then run this command from the same terminal.
+
+```powershell
+python -B harness.py --control controls/unread_summary.json --openai-model gpt-6.2-sol
+```
+
+The report records the requested model ID and final reply. This wrapper uses the
+Responses API and starts each trial with fresh conversation state. It exposes the
+read tools for the plain-text summary control.
+
 `environment.py` accepts a callable that takes `user_task` and `emails` as separate
 arguments and returns the final reply as a string. The future LangChain wrapper can
 implement that interface. To try a callable before it is wired into the CLI, pass it

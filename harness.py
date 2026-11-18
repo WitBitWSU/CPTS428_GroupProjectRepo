@@ -13,8 +13,11 @@ def build_parser():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--control", type=Path, required=True,
                         help="JSON fixture for a read-only control trial")
-    parser.add_argument("--demo-control", action="store_true",
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--demo-control", action="store_true",
                         help="use the deterministic fake agent for the control")
+    mode.add_argument("--openai-model", metavar="MODEL_ID",
+                      help="run the control with an OpenAI model through LangChain")
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).parent / "results")
     return parser
@@ -27,7 +30,7 @@ def write_results(output_dir, summary, trials):
     return path
 
 
-def run_control(path, repeats, output_dir, *, agent, env_name):
+def run_control(path, repeats, output_dir, *, agent, env_name, model_id=None):
     """Run the JSON-only control and store each final reply in the standard report."""
     from environment import invoke_json_agent
 
@@ -67,13 +70,15 @@ def run_control(path, repeats, output_dir, *, agent, env_name):
                "repeats": repeats, "trials": len(trials),
                "completed": sum(trial["status"] == "ok" for trial in trials),
                "control_passes": passed_count}
+    if model_id is not None:
+        summary["requested_model"] = model_id
     print(f"Control passed: {passed_count}/{len(trials)}")
     print(f"Results: {write_results(output_dir, summary, trials)}")
     return 0 if passed_count == len(trials) else 1
 
 
 def main():
-    from environment import demo_unread_summary
+    from environment import build_openai_control_agent, demo_unread_summary
 
     parser = build_parser()
     args = parser.parse_args()
@@ -84,11 +89,16 @@ def main():
     agent = demo_unread_summary if args.demo_control else None
     env_name = "demo_control" if args.demo_control else "environment"
     try:
+        if args.openai_model:
+            agent = build_openai_control_agent(args.openai_model)
+            env_name = "openai"
         return run_control(args.control, args.repeats, args.output_dir,
-                           agent=agent, env_name=env_name)
+                           agent=agent, env_name=env_name, model_id=args.openai_model)
     except NotImplementedError as exc:
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 2
+    except ImportError:
+        parser.error("install the OpenAI control dependencies with python -m pip install -r requirements.txt")
     except (OSError, ValueError, KeyError, TypeError) as exc:
         parser.error(str(exc))
 
