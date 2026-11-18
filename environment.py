@@ -83,17 +83,14 @@ def summary_message(user_task, emails):
     return {"role": "user", "content": content if len(content) > 1 else user_task}
 
 
-def build_openai_control_agent(model_id, *, send_control=False):
-    """Create a LangChain callable for a summary or an approved send control."""
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise ValueError("Set OPENAI_API_KEY in the PowerShell session running the harness")
+def build_agent_runner(model, api_error, describe_error, *, send_control=False):
+    """Wrap any LangChain chat model in the control agent used by the harness.
 
+    api_error is the provider's exception class and describe_error turns one of
+    those exceptions into a short message that is safe to record in a report.
+    """
     # Keep the offline demo usable without installing the model integration.
     from langchain.agents import create_agent
-    from langchain_openai import ChatOpenAI
-    from openai import APIError
-
-    model = ChatOpenAI(model=model_id, use_responses_api=True, store=False, timeout=60)
 
     def run_agent(user_task, emails):
         """Run one isolated model conversation and return its final reply."""
@@ -137,23 +134,74 @@ def build_openai_control_agent(model_id, *, send_control=False):
                 {"messages": [message]},
                 config={"recursion_limit": 12},
             )
-        except APIError as exc:
-            # Keep known diagnostic codes without recording the provider's full error body.
-            safe_codes = {
-                "insufficient_quota", "rate_limit_exceeded", "slow_down",
-                "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
-                "organization_usage_limit_exceeded", "usage_limit_exceeded",
-                "billing_not_active", "credit_balance_exhausted",
-            }
-            error_type = type(exc).__name__
-            code = getattr(exc, "code", None)
-            if not code and isinstance(exc.__cause__, APIError):
-                code = getattr(exc.__cause__, "code", None)
-            if isinstance(code, str) and code in safe_codes:
-                error_type = f"{error_type}, {code}"
-            raise RuntimeError(f"OpenAI request failed ({error_type})") from None
+        except api_error as exc:
+            raise RuntimeError(describe_error(exc)) from None
         if send_control:
             verify_control_send(email_tools)
         return result["messages"][-1].text
 
     return run_agent
+
+
+def build_openai_control_agent(model_id, *, send_control=False):
+    """Create a LangChain callable for a summary or an approved send control."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise ValueError("Set OPENAI_API_KEY in the PowerShell session running the harness")
+
+    from langchain_openai import ChatOpenAI
+    from openai import APIError
+
+    model = ChatOpenAI(model=model_id, use_responses_api=True, store=False, timeout=60)
+
+    def describe_error(exc):
+        """Keep known diagnostic codes without recording the provider's full error body."""
+        safe_codes = {
+            "insufficient_quota", "rate_limit_exceeded", "slow_down",
+            "organization_spend_limit_exceeded", "project_spend_limit_exceeded",
+            "organization_usage_limit_exceeded", "usage_limit_exceeded",
+            "billing_not_active", "credit_balance_exhausted",
+        }
+        error_type = type(exc).__name__
+        code = getattr(exc, "code", None)
+        if not code and isinstance(exc.__cause__, APIError):
+            code = getattr(exc.__cause__, "code", None)
+        if isinstance(code, str) and code in safe_codes:
+            error_type = f"{error_type}, {code}"
+        return f"OpenAI request failed ({error_type})"
+
+    return build_agent_runner(model, APIError, describe_error, send_control=send_control)
+
+
+def build_anthropic_control_agent(model_id, *, send_control=False):
+    """Create the same control agent as the OpenAI builder, backed by a Claude model."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise ValueError("Set ANTHROPIC_API_KEY in the terminal running the harness")
+
+    from anthropic import APIError
+    from langchain_anthropic import ChatAnthropic
+
+    # Do not set temperature, top_p, or top_k: newer Claude models reject non-default values.
+    # max_tokens is set explicitly so every run uses the same documented limit.
+    model = ChatAnthropic(model=model_id, max_tokens=4096, timeout=60)
+
+    def describe_error(exc):
+        """Record the error class, HTTP status, and Anthropic's error type, never the body text."""
+        parts = [type(exc).__name__]
+        status = getattr(exc, "status_code", None)
+        if isinstance(status, int):
+            parts.append(str(status))
+        body = getattr(exc, "body", None)
+        detail = body.get("error") if isinstance(body, dict) else None
+        kind = detail.get("type") if isinstance(detail, dict) else None
+        if isinstance(kind, str) and kind.replace("_", "").isalnum():
+            parts.append(kind)
+        return f"Anthropic request failed ({', '.join(parts)})"
+
+    return build_agent_runner(model, APIError, describe_error, send_control=send_control)
+
+
+# The harness picks a builder by provider name, so adding a provider is one new entry.
+CONTROL_AGENT_BUILDERS = {
+    "openai": build_openai_control_agent,
+    "anthropic": build_anthropic_control_agent,
+}
