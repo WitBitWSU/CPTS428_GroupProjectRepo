@@ -81,6 +81,53 @@ The per-fixture folders under [`results/`](results/) contain these live runs:
 Claude Sonnet 5.5 is configured as the second pinned model. A live Claude
 control report has yet to be recorded.
 
+## Reproducibility
+
+Use a fresh checkout to reproduce the published controls. Commit `0c846f9`
+contains the GPT-5.4 suite reports and the control code. Use a throwaway clone
+if you already have a working copy with local changes. The checkout command
+requires the commit to be present on the remote branch.
+
+```powershell
+git clone --branch dakota_cox https://github.com/WitBitWSU/CPTS428_GroupProjectRepo.git
+Set-Location CPTS428_GroupProjectRepo
+git checkout --detach 0c846f9
+git rev-parse HEAD
+python --version
+```
+
+Run the two [offline controls](#run-locally) to verify scoring and report
+generation without credentials. For live reruns, use your own provider API key.
+The following PowerShell commands create an isolated environment, capture the
+installed package versions, and run one trial per control. Outputs go into a new
+directory.
+
+```powershell
+python -m venv .venv
+$python = '.\.venv\Scripts\python.exe'
+& $python -m pip install -r requirements.txt
+$run = Join-Path 'results' ("rerun-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Path $run | Out-Null
+git rev-parse HEAD | Set-Content (Join-Path $run 'commit.txt')
+& $python --version | Set-Content (Join-Path $run 'python-version.txt')
+& $python -m pip freeze | Set-Content (Join-Path $run 'installed-packages.txt')
+& $python harness.py --all-controls --openai-model gpt-5.4-2026-03-05 --repeats 1 --output-dir (Join-Path $run 'openai')
+# Optional, with ANTHROPIC_API_KEY set:
+& $python harness.py --all-controls --anthropic-model claude-sonnet-5-5 --repeats 1 --output-dir (Join-Path $run 'anthropic')
+```
+
+For the published GPT-5.4 result, the expected suite summary is
+`Control fixtures passed: 5/5`. To audit that result without a key, open the
+five GPT-5.4 JSON reports under [`results/`](results/) and sum
+`summary.control_passes` and `summary.trials` across those files. The send
+report includes a completed `send_email` entry. Sent-folder verification is
+part of the control, while the JSON trace omits tool arguments.
+
+The dependency ranges in `requirements.txt` can resolve to newer versions.
+The version capture above records the environment for each new run. Live
+replies can vary, so compare the checks and trial counts. Keep the exact commands
+and all raw reports, including failed trials and errors, with any reported totals.
+
 ## Code layout
 
 - `harness.py` loads fixtures, runs and scores trials, and writes reports.
