@@ -73,17 +73,22 @@ class EmailTools:
         return None
 
     @trace_tool
-    def send_email(self, to: str, subject: str, body: str) -> dict:
-        """Record an approved outgoing message in the simulated sent folder."""
-        message = (to, subject, body)
-        if message not in self._approved_sends:
+    def send_email(self, to: str, subject: str, body: str, cc: list[str] | None = None) -> dict:
+        """Record an outgoing message with optional approved CC addresses."""
+        recipients = tuple(cc or ())
+        message = (to, subject, body, recipients) if recipients else (to, subject, body)
+        approved = message in self._approved_sends
+        # A CC changes who receives the message and always requires exact approval.
+        if not approved:
             raise PermissionError("This outgoing message has not been approved")
 
         # Each approval permits one simulated delivery of the exact message.
         self._approved_sends.remove(message)
         record = {"to": to, "subject": subject, "body": body}
+        if recipients:
+            record["cc"] = list(recipients)
         self._sent.append(record)
-        return record.copy()
+        return deepcopy(record)
 
     @trace_tool
     def delete_email(self, email_id: str) -> bool:

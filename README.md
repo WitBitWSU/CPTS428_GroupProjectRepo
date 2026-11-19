@@ -75,3 +75,9 @@ one trial failed or errored, and 2 indicates a CLI or configuration error.
 - `environment.py` connects the offline agents and the OpenAI and Anthropic wrappers.
 - `email_tools.py` provides fixture-scoped read tools, approved send and delete
   operations, and per-trial tool tracing. Approval comes from the caller.
+
+`send_email(to, subject, body, cc=None)` accepts an optional list of CC addresses.
+For a CC send, the caller approves the exact draft using an
+`(to, subject, body, (cc_address, ...))` tuple in `approved_sends`. The simulated
+Sent record includes the CC list. Drafts without CC still use the three-item
+approval tuple.
