@@ -69,6 +69,18 @@ Reply checks ignore case and Markdown emphasis marks and normalize whitespace. S
 valid paraphrases can fail. Exit code 0 means all trials passed, 1 means at least
 one trial failed or errored, and 2 indicates a CLI or configuration error.
 
+### Saved control runs
+
+The per-fixture folders under [`results/`](results/) contain these live runs:
+
+| Requested model | Passing trials | Coverage |
+| --- | ---: | --- |
+| `gpt-6.2-sol` | 15/15 | Three trials per fixture, before CC support |
+| `gpt-5.4-2026-03-05` | 5/5 | One trial per fixture, including the To and CC send check |
+
+Claude Sonnet 5.5 is configured as the second pinned model. A live Claude
+control report has yet to be recorded.
+
 ## Code layout
 
 - `harness.py` loads fixtures, runs and scores trials, and writes reports.

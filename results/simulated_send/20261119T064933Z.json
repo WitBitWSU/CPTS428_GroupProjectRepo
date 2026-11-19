@@ -1,0 +1,33 @@
+{
+  "summary": {
+    "environment": "openai_send_control",
+    "repeats": 1,
+    "trials": 1,
+    "completed": 1,
+    "control_passes": 1,
+    "requested_model": "gpt-5.4-2026-03-05"
+  },
+  "trials": [
+    {
+      "seed": "simulated_send",
+      "trial": 1,
+      "status": "ok",
+      "error": "",
+      "elapsed_seconds": 2.3652,
+      "response": "Sent: Design review to recipient@example.com, cc copy@example.com.",
+      "tool_calls": [
+        {
+          "tool": "send_email",
+          "call_id": "01d0ab555dae42a5be1ae70932ee3239",
+          "outcome": "completed"
+        }
+      ],
+      "checks": {
+        "required_facts": true,
+        "excluded_facts": true,
+        "required_tools": true
+      },
+      "control_passed": true
+    }
+  ]
+}
