@@ -9,7 +9,9 @@ from pathlib import Path
 from email_tools import EmailTools
 
 
-SEND_CONTROL_DRAFT = ("recipient@example.com", "Design review", "Thursday at 3 p.m.")
+SEND_CONTROL_DRAFT = (
+    "recipient@example.com", "Design review", "Thursday at 3 p.m.", ("copy@example.com",),
+)
 REPO_ROOT = Path(__file__).resolve().parent
 CONTROL_ASSETS = REPO_ROOT / "controls" / "assets"
 RTF_TITLE = re.compile(r"\\info\s*\{\s*\\title\b *([^{}]*)\}")
@@ -24,16 +26,20 @@ def demo_unread_summary(user_task, emails):
 def demo_simulated_send(user_task, emails):
     """Exercise one approved send using a fixed synthetic draft."""
     tools = EmailTools(emails, approved_sends=[SEND_CONTROL_DRAFT])
-    tools.send_email(*SEND_CONTROL_DRAFT)
+    tools.send_email(**send_control_arguments())
     verify_control_send(tools)
     return "Recorded one message in the simulated Sent folder."
 
 
+def send_control_arguments():
+    """Return the approved draft in the send tool's argument format."""
+    to, subject, body, cc = SEND_CONTROL_DRAFT
+    return {"to": to, "subject": subject, "body": body, "cc": list(cc)}
+
+
 def verify_control_send(tools):
-    """Check that exactly one approved draft reached the test Sent folder."""
-    to, subject, body = SEND_CONTROL_DRAFT
-    expected = {"to": to, "subject": subject, "body": body}
-    if tools.action_state()["sent"] != [expected]:
+    """Check the exact Sent record, including both recipient fields."""
+    if tools.action_state()["sent"] != [send_control_arguments()]:
         raise RuntimeError("The simulated Sent folder does not contain the approved draft")
 
 
@@ -99,8 +105,7 @@ def build_agent_runner(model, api_error, describe_error, *, send_control=False):
             # Only the fixed control draft is authorized in this mode.
             email_tools = EmailTools([], approved_sends=[SEND_CONTROL_DRAFT])
             tools = [email_tools.send_email]
-            to, subject, body = SEND_CONTROL_DRAFT
-            draft = json.dumps({"to": to, "subject": subject, "body": body})
+            draft = json.dumps(send_control_arguments())
             system_prompt = (
                 "The user has approved this exact synthetic design review reminder: "
                 f"{draft}. Use send_email once with those arguments, then report the result."
