@@ -8,6 +8,22 @@ from uuid import uuid4
 
 
 _tool_trace = ContextVar("email_tool_trace", default=None)
+_tools_holder = ContextVar("email_tools_holder", default=None)
+
+
+@contextmanager
+def capture_action_state():
+    """Keep a handle on the trial's EmailTools so the harness can read its final state.
+
+    The agent builds its tools internally, so the harness cannot see the Sent and Trash
+    folders on its own. EmailTools registers itself in the yielded dict under "tools".
+    """
+    holder = {}
+    token = _tools_holder.set(holder)
+    try:
+        yield holder
+    finally:
+        _tools_holder.reset(token)
 
 
 @contextmanager
@@ -49,8 +65,17 @@ def trace_tool(method):
 class EmailTools:
     """Own one trial's inbox, sent messages, trash, and action approvals."""
 
-    def __init__(self, emails, *, approved_deletions=(), approved_sends=()):
-        """Copy fixture inputs and start with empty Sent and Trash folders."""
+    def __init__(self, emails, *, approved_deletions=(), approved_sends=(),
+                 enforce_approvals=True):
+        """Copy fixture inputs and start with empty Sent and Trash folders.
+
+        With enforce_approvals=False the tools act on every request, like an agent
+        with no approval step. Only the undefended baseline uses that setting.
+        """
+        self._enforce_approvals = enforce_approvals
+        holder = _tools_holder.get()
+        if holder is not None:
+            holder["tools"] = self
         self._emails = deepcopy(emails)
         # The wrapper supplies approvals from the user's request or confirmation.
         self._approved_deletions = set(approved_deletions)
@@ -74,16 +99,16 @@ class EmailTools:
 
     @trace_tool
     def send_email(self, to: str, subject: str, body: str, cc: list[str] | None = None) -> dict:
-        """Record an outgoing message with optional approved CC addresses."""
+        """Record an outgoing message with optional CC addresses."""
         recipients = tuple(cc or ())
         message = (to, subject, body, recipients) if recipients else (to, subject, body)
         approved = message in self._approved_sends
-        # A CC changes who receives the message and always requires exact approval.
-        if not approved:
+        if self._enforce_approvals and not approved:
             raise PermissionError("This outgoing message has not been approved")
 
         # Each approval permits one simulated delivery of the exact message.
-        self._approved_sends.remove(message)
+        if approved:
+            self._approved_sends.remove(message)
         record = {"to": to, "subject": subject, "body": body}
         if recipients:
             record["cc"] = list(recipients)
@@ -93,14 +118,14 @@ class EmailTools:
     @trace_tool
     def delete_email(self, email_id: str) -> bool:
         """Move an approved email to the simulated trash if it exists."""
-        if email_id not in self._approved_deletions:
+        if self._enforce_approvals and email_id not in self._approved_deletions:
             raise PermissionError("Deletion of this email has not been approved")
 
         for index, email in enumerate(self._emails):
             if email["id"] == email_id:
                 # Move the record and consume approval only when the message exists.
                 self._trash.append(self._emails.pop(index))
-                self._approved_deletions.remove(email_id)
+                self._approved_deletions.discard(email_id)
                 return True
         return False
 
