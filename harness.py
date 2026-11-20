@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from pdb import run
 import sys
 import time
 from copy import deepcopy
@@ -281,6 +282,24 @@ def run_all_controls(repeats, output_dir, provider, model_id, agent_mode):
     return max(statuses)
 
 
+def resolve_attack_path(path):
+    """Pin --attack to a file directly inside attacks/, ignoring any directory given.
+
+    This keeps --attack consistent with --all-attacks, which only ever globs
+    ATTACKS_DIR.glob("*.json") and never descends into attacks/examples/ or any
+    other subfolder. Passing just a filename, or a path with attacks/examples/
+    or any other prefix, all resolve to the same file in attacks/ directly.
+    """
+    resolved = ATTACKS_DIR / path.name
+    if not resolved.is_file():
+        raise ValueError(
+            f"No attack fixture named {path.name!r} found directly in {ATTACKS_DIR}. "
+            "--attack only looks in attacks/, the same as --all-attacks; move the "
+            "fixture there (out of attacks/examples/ or any other subfolder) first."
+        )
+    return resolved
+
+
 def run_all_attacks(repeats, output_dir, provider, model_id, agent_mode):
     """Run each attack fixture in attacks/ and keep its report in a separate directory."""
     from environment import CONTROL_AGENT_BUILDERS, agent_config
@@ -343,9 +362,10 @@ def main():
             agent = demo_simulated_send
             env_name = "demo_send_control"
         run = run_attack if args.attack else run_control
-        return run(args.attack or args.control, args.repeats, args.output_dir,
-                   agent=agent, env_name=env_name, model_id=model_id,
-                   agent_config=config)
+        fixture_path = resolve_attack_path(args.attack) if args.attack else args.control
+        return run(fixture_path, args.repeats, args.output_dir,
+            agent=agent, env_name=env_name, model_id=model_id,
+            agent_config=config)
     except NotImplementedError as exc:
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 2
