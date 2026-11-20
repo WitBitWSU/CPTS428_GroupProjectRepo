@@ -6,7 +6,7 @@ import json
 import os
 import re
 from pathlib import Path
-
+from tool_policy import allowed_tools_for_task
 from email_tools import EmailTools
 
 
@@ -166,8 +166,18 @@ def build_agent_runner(model, api_error, describe_error, *, send_control=False,
                     ]
                 records.append(record)
             # The baseline skips approval checks, so any tool call the model makes takes effect.
-            email_tools = EmailTools(records, enforce_approvals=agent_mode == "hardened")
-            tools = [getattr(email_tools, name) for name in AGENT_TOOL_NAMES[agent_mode]]
+            email_tools = EmailTools(
+                records, 
+                enforce_approvals=agent_mode == "hardened")
+            
+            if agent_mode == "hardened":
+                tool_names = allowed_tools_for_task(user_task)
+            else:
+                tool_names = AGENT_TOOL_NAMES["baseline"]
+
+            tools = [getattr(email_tools, name) for name in tool_names]
+
+            
             system_prompt = SYSTEM_PROMPTS[agent_mode]
             message = summary_message(user_task, emails)
         agent = create_agent(model, tools=tools, system_prompt=system_prompt)
