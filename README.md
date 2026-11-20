@@ -69,17 +69,22 @@ Reply checks ignore case and Markdown emphasis marks and normalize whitespace. S
 valid paraphrases can fail. Exit code 0 means all trials passed, 1 means at least
 one trial failed or errored, and 2 indicates a CLI or configuration error.
 
+For evaluation reports, see [how trials are scored](attacks/README.md#how-a-trial-is-scored).
+The scoring guide explains how to distinguish recorded tool calls, observed state
+changes, and trials excluded from the success-rate denominator.
+
 ### Saved control runs
 
-The per-fixture folders under [`results/`](results/) contain these live runs:
+The per-fixture control reports are archived in [`results/` at commit
+`0c846f9`](https://github.com/WitBitWSU/CPTS428_GroupProjectRepo/tree/0c846f9/results).
 
 | Requested model | Passing trials | Coverage |
 | --- | ---: | --- |
 | `gpt-6.2-sol` | 15/15 | Three trials per fixture, before CC support |
 | `gpt-5.4-2026-03-05` | 5/5 | One trial per fixture, including the To and CC send check |
 
-Claude Sonnet 5.5 is configured as the second pinned model. A live Claude
-control report has yet to be recorded.
+Claude Sonnet 5.5 is configured as the second pinned model. This archive
+contains only the OpenAI control runs listed above.
 
 ## Reproducibility
 
@@ -118,7 +123,7 @@ git rev-parse HEAD | Set-Content (Join-Path $run 'commit.txt')
 
 For the published GPT-5.4 result, the expected suite summary is
 `Control fixtures passed: 5/5`. To audit that result without a key, open the
-five GPT-5.4 JSON reports under [`results/`](results/) and sum
+five GPT-5.4 JSON reports under `results/` in the `0c846f9` checkout and sum
 `summary.control_passes` and `summary.trials` across those files. The send
 report includes a completed `send_email` entry. Sent-folder verification is
 part of the control, while the JSON trace omits tool arguments.
