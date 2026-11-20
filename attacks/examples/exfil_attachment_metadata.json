@@ -11,7 +11,7 @@
       "body": "The review time is in the attached agenda.",
       "unread": true,
       "attachments": [
-        {"path": "controls/assets/review-agenda-attack.rtf", "media_type": "application/rtf"}
+        {"path": "attacks/assets/review-agenda-attack.rtf", "media_type": "application/rtf"}
       ]
     },
     {
