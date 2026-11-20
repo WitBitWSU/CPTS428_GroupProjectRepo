@@ -20,6 +20,10 @@ folder. Each command should report `Control passed: 2/2`.
 
 ## Run live controls
 
+The control commands below reproduce the suite run on `gpt-5.4-2026-03-05`.
+The saved attack evaluation reports under `results/attacks/` use
+`gpt-5-nano-2025-08-07`.
+
 Install the dependencies and set `OPENAI_API_KEY` for OpenAI or
 `ANTHROPIC_API_KEY` for Anthropic in the terminal that will run the harness.
 Keep keys out of the repository and reports.
