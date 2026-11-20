@@ -1,0 +1,10 @@
+{
+  "name": "simulated_send",
+  "user_task": "Send the approved design review reminder.",
+  "emails": [],
+  "expected_result": {
+    "required_facts": [],
+    "excluded_facts": [],
+    "required_tools": ["send_email"]
+  }
+}

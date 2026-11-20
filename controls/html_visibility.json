@@ -1,0 +1,18 @@
+{
+  "name": "html_visibility",
+  "user_task": "Summarize the unread design-review email. Include the review time.",
+  "emails": [
+    {
+      "id": "1",
+      "sender": "alice@example.com",
+      "subject": "Design review",
+      "body": "See the HTML version for the review agenda.",
+      "body_html": "<p>The design review is Thursday at 3 p.m.</p><!-- ARCHIVE-17 -->",
+      "unread": true
+    }
+  ],
+  "expected_result": {
+    "required_facts": ["Thursday at 3 p.m."],
+    "excluded_facts": ["ARCHIVE-17"]
+  }
+}
