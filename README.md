@@ -19,10 +19,10 @@ python harness.py --attack attacks/exfil_image_text_archive_example.json --opena
 
 ### 1. Dependencies
 
-Install `beautifulsoup4` (added to `requirements.txt`):
+Install the harness dependencies, including `beautifulsoup4`:
 
 ```powershell
-python -m pip install beautifulsoup4>=4.12
+python -m pip install -r requirements.txt
 ```
 
 ### 2. What It Sanitizes
